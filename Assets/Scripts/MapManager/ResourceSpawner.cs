@@ -1,149 +1,108 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using static MapUtilities;
 
-[System.Serializable]
-public class TreeSettings
-{
-    public GameObject treePrefab;
-    [Range(0,1)] public float treeProb = 0.08f;
-    public float treeBiasHeightMin = 0.45f;
-    public float treeBiasHeightMax = 0.80f;
-}
 
-[System.Serializable]
-public class ResourceSettings
+public class ResourceSpawner : MonoBehaviour
 {
-    public Transform resourceParent;
+    [Header("References")]
+    [SerializeField] private Tilemap groundTilemap;
+    [SerializeField] private GameObject resourceHolder;
+    [SerializeField] private GameObject resourceNodePrefab; // The base prefab for any resource
     
-    [Header("Grass Resources")]
-    public GameObject[] grassResourcePrefabs;
-    [Range(0, 1)] public float grassResourceSpawnChance = 0.1f;
+    [Header("Biome Configuration")]
+    [SerializeField] private List<BiomeData> biomes;
 
-    [Header("Sand Resources")]
-    public GameObject[] sandResourcePrefabs;
-    [Range(0, 1)] public float sandResourceSpawnChance = 0.05f;
-}
+    [Header("Spawn Settings")]
+    [Range(0, 1)]
+    [SerializeField] private float globalSpawnChance = 0.1f; // 10% chance for any tile to attempt spawning
 
-public class ResourceSpawner
-{
-    private int width, height;
-    private Biome[,] biomeMap;
-    private float[,] heightMap;
-    private Tilemap tilemap;
+    // We remove the Start() method to prevent automatic spawning.
+    // public void Start()
+    // {
+    //     SpawnResources();
+    // }
 
-    public ResourceSpawner(int mapWidth, int mapHeight, Tilemap tileMap)
+    public void SpawnResources()
     {
-        width = mapWidth;
-        height = mapHeight;
-        tilemap = tileMap;
-    }
-
-    public void SpawnResources(Biome[,] inputBiomeMap, float[,] inputHeightMap, TreeSettings treeSettings, ResourceSettings resourceSettings)
-    {
-        biomeMap = inputBiomeMap;
-        heightMap = inputHeightMap;
-
-        ClearResources(resourceSettings.resourceParent);
-
-        for (int y = 0; y < height; y++)
+        // First, clear any previously spawned resources
+        if (resourceHolder != null)
         {
-            for (int x = 0; x < width; x++)
+            for (int i = resourceHolder.transform.childCount - 1; i >= 0; i--)
             {
-                Vector2Int cell = new Vector2Int(x, y);
+                Destroy(resourceHolder.transform.GetChild(i).gameObject);
+            }
+        }
+        else
+        {
+            resourceHolder = new GameObject("Spawned Resources");
+        }
+        
+        BoundsInt bounds = groundTilemap.cellBounds;
 
-                // Spawn trees
-                if (biomeMap[x, y] == Biome.Grass && treeSettings.treePrefab != null)
+        for (int x = bounds.xMin; x < bounds.xMax; x++)
+        {
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
+            {
+                TileBase tile = groundTilemap.GetTile(new Vector3Int(x, y, 0));
+                
+                if (tile != null)
                 {
-                    SpawnTree(x, y, cell, treeSettings, resourceSettings.resourceParent);
-                }
-
-                // Spawn other resources (với buffer để tránh spawn ở biên)
-                if (x >= 3 && x < width - 3 && y >= 3 && y < height - 3)
-                {
-                    if (biomeMap[x, y] == Biome.Grass)
+                    // Roll the dice to see if we should spawn anything on this tile
+                    if (Random.value > globalSpawnChance)
                     {
-                        SpawnGrassResources(x, y, resourceSettings);
+                        continue; // Unlucky, try next tile
                     }
-                    else if (biomeMap[x, y] == Biome.Sand)
+                    
+                    // Find the correct biome for this tile
+                    BiomeData currentBiome = FindBiomeForTile(tile);
+                    if (currentBiome != null)
                     {
-                        SpawnSandResources(x, y, resourceSettings);
+                        // Try to spawn a resource based on the biome's rules
+                        TrySpawnResource(currentBiome, new Vector3Int(x, y, 0));
                     }
                 }
             }
         }
     }
 
-    private void SpawnTree(int x, int y, Vector2Int cell, TreeSettings settings, Transform parent)
+    private BiomeData FindBiomeForTile(TileBase tile)
     {
-        float h = heightMap[x, y];
-        if (h > settings.treeBiasHeightMin && h < settings.treeBiasHeightMax)
+        return biomes.FirstOrDefault(biome => biome.compatibleTiles.Contains(tile));
+    }
+
+    private void TrySpawnResource(BiomeData biome, Vector3Int position)
+    {
+        float totalWeight = biome.resourceSpawns.Sum(rs => rs.spawnWeight);
+        float randomValue = Random.Range(0, totalWeight);
+
+        float currentWeight = 0;
+        foreach (var resourceSpawn in biome.resourceSpawns)
         {
-            float plantNoise = Mathf.PerlinNoise((x + 1000.123f) * 0.37f, (y - 999.321f) * 0.41f);
-            if (plantNoise < settings.treeProb)
+            currentWeight += resourceSpawn.spawnWeight;
+            if (randomValue <= currentWeight)
             {
-                Vector3 worldPos = tilemap.CellToWorld((Vector3Int)cell) + new Vector3(0.5f, 0.5f, 0f);
-                Object.Instantiate(settings.treePrefab, worldPos, Quaternion.identity, parent);
+                // Found the resource to spawn
+                Vector3 spawnPos = groundTilemap.GetCellCenterWorld(position);
+                
+                // Instantiate from the base prefab
+                GameObject newNodeObject = Instantiate(resourceNodePrefab, spawnPos, Quaternion.identity, resourceHolder.transform);
+                
+                // Get the ResourceNode component and initialize it with the correct data
+                ResourceNode node = newNodeObject.GetComponent<ResourceNode>();
+                if (node != null)
+                {
+                    node.Initialize(resourceSpawn.resourceData);
+                }
+                else
+                {
+                    Debug.LogError("resourceNodePrefab does not have a ResourceNode component!", resourceNodePrefab);
+                }
+
+                return; // Stop after spawning one resource on this tile
             }
         }
     }
-
-    private void SpawnGrassResources(int x, int y, ResourceSettings settings)
-    {
-        // Kiểm tra vùng cỏ phải đủ lớn (ít nhất 80% vùng 5x5 là cỏ)
-        if (MapUtilities.IsLargeArea(biomeMap, x, y, Biome.Grass, 2, 0.8f, width, height) &&
-            !MapUtilities.IsNearBiome(biomeMap, x, y, Biome.Water, 4, width, height) && 
-            !MapUtilities.IsNearBiome(biomeMap, x, y, Biome.Sand, 4, width, height))
-        {
-            if (settings.grassResourcePrefabs.Length > 0 && Random.Range(0f, 1f) < settings.grassResourceSpawnChance)
-                SpawnResource(settings.grassResourcePrefabs, x, y, settings.resourceParent);
-        }
-    }
-
-    private void SpawnSandResources(int x, int y, ResourceSettings settings)
-    {
-        // Kiểm tra vùng cát phải đủ lớn (ít nhất 70% vùng 7x7 là cát)
-        if (MapUtilities.IsLargeArea(biomeMap, x, y, Biome.Sand, 3, 0.7f, width, height) &&
-            !MapUtilities.IsNearBiome(biomeMap, x, y, Biome.Water, 4, width, height))
-        {
-            if (settings.sandResourcePrefabs.Length > 0 && Random.Range(0f, 1f) < settings.sandResourceSpawnChance)
-                SpawnResource(settings.sandResourcePrefabs, x, y, settings.resourceParent);
-        }
-    }
-
-    private void SpawnResource(GameObject[] resourceArray, int x, int y, Transform parent)
-    {
-        // Kiểm tra biên map
-        if (x < 0 || x >= width || y < 0 || y >= height)
-            return;
-
-        // Kiểm tra tile hợp lệ
-        Vector3Int cellPos = new Vector3Int(x, y, 0);
-        TileBase currentTile = tilemap.GetTile(cellPos);
-        if (currentTile == null)
-            return;
-
-        // Chỉ spawn trên cỏ hoặc cát
-        Biome currentBiome = biomeMap[x, y];
-        if (currentBiome != Biome.Grass && currentBiome != Biome.Sand)
-            return;
-
-        // Chọn prefab ngẫu nhiên và spawn
-        GameObject resourcePrefab = resourceArray[Random.Range(0, resourceArray.Length)];
-        Vector3 spawnPosition = tilemap.GetCellCenterWorld(cellPos);
-        Object.Instantiate(resourcePrefab, spawnPosition, Quaternion.identity, parent);
-    }
-
-    private void ClearResources(Transform resourceParent)
-    {
-        if (resourceParent == null) return;
-        for (int i = resourceParent.childCount - 1; i >= 0; i--)
-        {
-            Transform c = resourceParent.GetChild(i);
-            if (Application.isPlaying) 
-                Object.Destroy(c.gameObject);
-            else 
-                Object.DestroyImmediate(c.gameObject);
-        }
-    }
 }
+

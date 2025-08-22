@@ -5,9 +5,12 @@ public abstract class EntityState
     protected StateMachine stateMachine;
     protected string animBoolName;
     protected Rigidbody2D rb;
-
     protected Animator anim;
 
+
+
+    protected float stateTimer;
+    protected bool triggerCalled;
 
     public EntityState(StateMachine stateMachine, string animBoolName)
     {
@@ -18,10 +21,19 @@ public abstract class EntityState
     public virtual void Enter()
     {
         anim.SetBool(animBoolName, true);
+        triggerCalled = false;
     }
 
     public virtual void Update()
-    {}
+    {
+        stateTimer -= Time.deltaTime;
+        UpdateAnimationParameters();
+    }
+
+    public virtual void UpdateAnimationParameters()
+    {
+
+    }
 
     public virtual void Exit()
     {
@@ -29,5 +41,7 @@ public abstract class EntityState
     }
 
     public virtual void AnimationTrigger()
-    {}
+    {
+        triggerCalled = true;
+    }
 }

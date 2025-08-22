@@ -10,7 +10,6 @@ public class PLayer_IdleState : PlayerState
     public override void Enter()
     {
         base.Enter();
-        // Tắt animation chạy khi vào trạng thái idle
         player.anim.SetBool("run", false);
         player.SetVelocity(0, 0);
     }
@@ -19,13 +18,21 @@ public class PLayer_IdleState : PlayerState
     {
         base.Update();
 
-        // Ưu tiên di chuyển ngang
-        if (player.moveInput.x != 0)
-            stateMachine.ChangeState(player.runLeftRightState);
-        // Nếu không di chuyển ngang, kiểm tra di chuyển dọc
-        else if (player.moveInput.y > 0)
-            stateMachine.ChangeState(player.goUpState);
-        else if (player.moveInput.y < 0)
-            stateMachine.ChangeState(player.goDownState);
+        player.anim.SetFloat("xVelocity", player.lastDirection.x);
+        player.anim.SetFloat("yVelocity", player.lastDirection.y);
+
+        if (player.moveInput.x != 0 || player.moveInput.y != 0)
+            stateMachine.ChangeState(player.runState);
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            player.SetVelocity(0, 0);
+            stateMachine.ChangeState(player.axeState);
+        }
+
+        if (Input.GetKeyDown(KeyCode.F)){
+            player.SetVelocity(0, 0);
+            stateMachine.ChangeState(player.axeExpState);
+        }
     }
 }

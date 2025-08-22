@@ -1,11 +1,13 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using static MapUtilities;
+using System.Collections.Generic; // Added for List
 
 public class PerlinMapGenerator : MonoBehaviour
 {
     [Header("Grid/Tilemap")]
     public Tilemap tilemap;
+    public Tilemap waterTilemap;
 
     [Header("Size")]
     public int width = 128;
@@ -33,11 +35,16 @@ public class PerlinMapGenerator : MonoBehaviour
     [Header("Smoothing Settings")]
     public BiomeSmoothingSettings smoothingSettings;
 
-    [Header("Tree Settings")]
-    public TreeSettings treeSettings;
+    // These are no longer needed with the new system
+    // [Header("Tree Settings")]
+    // public TreeSettings treeSettings;
+    //
+    // [Header("Resource Settings")]
+    // public ResourceSettings resourceSettings;
 
-    [Header("Resource Settings")]
-    public ResourceSettings resourceSettings;
+    [Header("System References")]
+    [SerializeField] private ResourceSpawner resourceSpawner; // Reference to the new spawner
+    [SerializeField] private Transform playerTransform; // Reference to the player
 
     // Internal data
     private Biome[,] biomeMap;
@@ -46,13 +53,14 @@ public class PerlinMapGenerator : MonoBehaviour
     
     // Processors
     private BiomeProcessor biomeProcessor;
-    private ResourceSpawner resourceSpawner;
+    // private ResourceSpawner resourceSpawner; // Old internal variable, removed
 
     void Start()
     {
         prng = new System.Random(seed);
         biomeProcessor = new BiomeProcessor(width, height);
-        resourceSpawner = new ResourceSpawner(width, height, tilemap);
+        playerTransform = GameObject.FindGameObjectWithTag("Player").transform;
+        
         Generate();
     }
 
@@ -81,6 +89,7 @@ public class PerlinMapGenerator : MonoBehaviour
     {
         // Bước 1: Xóa dữ liệu cũ
         tilemap.ClearAllTiles();
+        waterTilemap.ClearAllTiles();
         biomeMap = new Biome[width, height];
         heightMap = new float[width, height];
 
@@ -93,11 +102,58 @@ public class PerlinMapGenerator : MonoBehaviour
         // Bước 4: Đặt tiles lên tilemap
         PlaceTiles();
 
-        // Bước 5: Spawn resources và trees
-        resourceSpawner.SpawnResources(biomeMap, heightMap, treeSettings, resourceSettings);
+        // Bước 5: Spawn resources using the new system
+        if (resourceSpawner != null)
+        {
+            resourceSpawner.SpawnResources();
+        }
+        else
+        {
+            Debug.LogWarning("ResourceSpawner reference is not set in PerlinMapGenerator. Resources will not be spawned.");
+        }
 
-        // Bước 6: Optimize tilemap
+        // Bước 6: Position the player in a safe spot
+        PositionPlayerAtSafeLocation();
+
+        // Bước 7: Optimize tilemap
         tilemap.CompressBounds();
+    }
+
+    private void PositionPlayerAtSafeLocation()
+    {
+        if (playerTransform == null)
+        {
+            Debug.LogWarning("Player Transform reference is not set in PerlinMapGenerator. Player will not be positioned.");
+            return;
+        }
+
+        List<Vector2Int> safeLocations = new List<Vector2Int>();
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                // Consider Grass and Sand as safe spawn points
+                if (biomeMap[x, y] == Biome.Grass || biomeMap[x, y] == Biome.Sand)
+                {
+                    safeLocations.Add(new Vector2Int(x, y));
+                }
+            }
+        }
+
+        if (safeLocations.Count > 0)
+        {
+            // Pick a random safe location
+            Vector2Int spawnCell = safeLocations[Random.Range(0, safeLocations.Count)];
+            Vector3 spawnPosition = tilemap.GetCellCenterWorld((Vector3Int)spawnCell);
+            playerTransform.position = spawnPosition;
+            Debug.Log($"Player spawned at safe location: {spawnCell}");
+        }
+        else
+        {
+            Debug.LogError("Could not find any safe location to spawn the player! The map might be all water/mountains.");
+            // As a fallback, spawn at the center
+            playerTransform.position = tilemap.GetCellCenterWorld(new Vector3Int(width / 2, height / 2, 0));
+        }
     }
 
     private void GenerateInitialBiomes()
@@ -131,8 +187,17 @@ public class PerlinMapGenerator : MonoBehaviour
             for (int x = 0; x < width; x++)
             {
                 Vector2Int cell = new Vector2Int(x, y);
-                TileBase tileToSet = GetTileForBiome(biomeMap[x, y]);
-                tilemap.SetTile((Vector3Int)cell, tileToSet);
+                Biome biome = biomeMap[x, y];
+                TileBase tileToSet = GetTileForBiome(biome);
+
+                if (biome == Biome.Water)
+                {
+                    waterTilemap.SetTile((Vector3Int)cell, tileToSet);
+                }
+                else
+                {
+                    tilemap.SetTile((Vector3Int)cell, tileToSet);
+                }
             }
         }
     }

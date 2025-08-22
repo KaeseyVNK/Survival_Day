@@ -3,17 +3,26 @@ using UnityEngine;
 public class Player : Entity
 {
     public static Player instance;
-
     public Player_Input input { get; private set; }
 
 
+
     public PLayer_IdleState idleState { get; private set; }
-    public Player_GoDown goDownState { get; private set; }
-    public Player_GoUp goUpState { get; private set; }
-    public Player_Run_Left_Right runLeftRightState { get; private set; }
-    
+    public Player_Run runState { get; private set; }
+    public Player_Axe axeState { get; private set; }
+    public Player_Axe_Exp axeExpState { get; private set; }
+
+
+
+
+
     public Vector2 moveInput { get; private set; }
     public Vector2 mousePosition { get; private set; }
+    public Vector2 lastDirection  { get; private set; } = Vector2.down;
+
+
+
+
 
     public float moveSpeed;
 
@@ -24,9 +33,9 @@ public class Player : Entity
         input = new Player_Input();
 
         idleState = new PLayer_IdleState(this, stateMachine, "idle");
-        goDownState = new Player_GoDown(this, stateMachine, "run");
-        goUpState = new Player_GoUp(this, stateMachine, "run");
-        runLeftRightState = new Player_Run_Left_Right(this, stateMachine, "run");
+        runState = new Player_Run(this, stateMachine, "run");
+        axeState = new Player_Axe(this, stateMachine, "Axe");
+        axeExpState = new Player_Axe_Exp(this, stateMachine, "axe");
     }
 
     protected override void Start()
@@ -47,6 +56,21 @@ public class Player : Entity
     {
         input.Disable();
     }
+
+    public void UpdateLastDirection(Vector2 direction)
+{
+    if (direction != Vector2.zero)
+    {
+
+        Vector2 normalizedDir = direction.normalized;
+        
+        float angle = Mathf.Atan2(normalizedDir.y, normalizedDir.x) * Mathf.Rad2Deg;
+        angle = Mathf.Round(angle / 45f) * 45f; 
+        
+        float rad = angle * Mathf.Deg2Rad;
+        lastDirection = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+    }
+}
 
 
 }

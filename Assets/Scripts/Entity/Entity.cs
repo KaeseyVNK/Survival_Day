@@ -47,6 +47,12 @@ public class Entity : MonoBehaviour
         isFacingRight = !isFacingRight;
         facingDir = facingDir * -1;
     }
+
+    public void CurrentStateAnimationTrigger()
+    {
+        stateMachine.currentState.AnimationTrigger();
+    }
+
 }
 
 
