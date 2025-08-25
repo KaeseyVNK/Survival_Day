@@ -16,6 +16,6 @@ MonoBehaviour:
   sprite: {fileID: 8281167024378096558, guid: 4335a0031c9aac74e8c0ff2580ff9976, type: 3}
   maxHealth: 20
   isTriggerable: 1
-  dropPrefab: {fileID: 1972079046559241568, guid: f795c44f02802eb4f96df218716df3bf, type: 3}
+  itemToDrop: {fileID: 11400000, guid: d61100df906fc8a4c9f1c1a820873bde, type: 2}
   minDropAmount: 1
   maxDropAmount: 3

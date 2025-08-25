@@ -2,80 +2,80 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-
+using System.Collections;
 
 public class ResourceSpawner : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private Tilemap groundTilemap;
-    [SerializeField] private GameObject resourceHolder;
-    [SerializeField] private GameObject resourceNodePrefab; // The base prefab for any resource
-    
+    [SerializeField] private GameObject resourceNodePrefab;
+    [SerializeField] private PerlinMapGenerator mapGenerator; // Added for world seed access
+
     [Header("Biome Configuration")]
     [SerializeField] private List<BiomeData> biomes;
 
     [Header("Spawn Settings")]
     [Range(0, 1)]
-    [SerializeField] private float globalSpawnChance = 0.1f; // 10% chance for any tile to attempt spawning
+    [SerializeField] private float globalSpawnChance = 0.1f;
 
-    // We remove the Start() method to prevent automatic spawning.
-    // public void Start()
-    // {
-    //     SpawnResources();
-    // }
-
-    public void SpawnResources()
+    // This is the new main function to be called by ChunkManager
+    public IEnumerator SpawnResourcesForChunkCoroutine(ChunkData data, Transform parent)
     {
-        // First, clear any previously spawned resources
-        if (resourceHolder != null)
-        {
-            for (int i = resourceHolder.transform.childCount - 1; i >= 0; i--)
-            {
-                Destroy(resourceHolder.transform.GetChild(i).gameObject);
-            }
-        }
-        else
-        {
-            resourceHolder = new GameObject("Spawned Resources");
-        }
-        
-        BoundsInt bounds = groundTilemap.cellBounds;
+        // Create a deterministic random number generator based on world seed and chunk coordinates
+        int chunkSeed = mapGenerator.seed + data.chunkCoord.GetHashCode();
+        System.Random prng = new System.Random(chunkSeed);
 
-        for (int x = bounds.xMin; x < bounds.xMax; x++)
+        int chunkSize = data.biomeMap.GetLength(0);
+        int startX = data.chunkCoord.x * chunkSize;
+        int startY = data.chunkCoord.y * chunkSize;
+
+        for (int y = 0; y < chunkSize; y++)
         {
-            for (int y = bounds.yMin; y < bounds.yMax; y++)
+            for (int x = 0; x < chunkSize; x++)
             {
-                TileBase tile = groundTilemap.GetTile(new Vector3Int(x, y, 0));
-                
-                if (tile != null)
+                // Use the deterministic random generator
+                if (prng.NextDouble() > globalSpawnChance)
                 {
-                    // Roll the dice to see if we should spawn anything on this tile
-                    if (Random.value > globalSpawnChance)
-                    {
-                        continue; // Unlucky, try next tile
-                    }
-                    
-                    // Find the correct biome for this tile
-                    BiomeData currentBiome = FindBiomeForTile(tile);
-                    if (currentBiome != null)
-                    {
-                        // Try to spawn a resource based on the biome's rules
-                        TrySpawnResource(currentBiome, new Vector3Int(x, y, 0));
-                    }
+                    continue;
+                }
+                
+                Biome biomeEnum = data.biomeMap[x, y];
+                BiomeData currentBiomeData = FindBiomeData(biomeEnum);
+
+                if (currentBiomeData != null)
+                {
+                    Vector3Int cellPos = new Vector3Int(startX + x, startY + y, 0);
+                    // Pass the seeded generator and chunk coordinates to the spawn method
+                    TrySpawnResource(currentBiomeData, cellPos, parent, prng, data.chunkCoord);
                 }
             }
+            yield return null; // Pause after each row
         }
     }
 
-    private BiomeData FindBiomeForTile(TileBase tile)
+    private BiomeData FindBiomeData(Biome biomeEnum)
     {
-        return biomes.FirstOrDefault(biome => biome.compatibleTiles.Contains(tile));
+        return biomes.FirstOrDefault(b => b.biomeType == biomeEnum);
     }
 
-    private void TrySpawnResource(BiomeData biome, Vector3Int position)
+    private void TrySpawnResource(BiomeData biome, Vector3Int position, Transform parent, System.Random prng, Vector2Int chunkCoord)
     {
+        // 1. Generate a unique, deterministic ID for this potential resource
+        string resourceId = $"res_{chunkCoord.x}_{chunkCoord.y}_{position.x}_{position.y}";
+
+        // 2. Check with the WorldStateManager if this resource has already been destroyed
+        if (WorldStateManager.instance != null && WorldStateManager.instance.IsResourceDestroyed(resourceId))
+        {
+            return; // Don't spawn this resource
+        }
+
+        if (biome.resourceSpawns == null || biome.resourceSpawns.Count == 0) return;
+
         float totalWeight = biome.resourceSpawns.Sum(rs => rs.spawnWeight);
-        float randomValue = Random.Range(0, totalWeight);
+        if (totalWeight <= 0) return;
+
+        // Use the deterministic random generator
+        float randomValue = (float)(prng.NextDouble() * totalWeight);
 
         float currentWeight = 0;
         foreach (var resourceSpawn in biome.resourceSpawns)
@@ -83,24 +83,21 @@ public class ResourceSpawner : MonoBehaviour
             currentWeight += resourceSpawn.spawnWeight;
             if (randomValue <= currentWeight)
             {
-                // Found the resource to spawn
                 Vector3 spawnPos = groundTilemap.GetCellCenterWorld(position);
+                GameObject newNodeObject = Instantiate(resourceNodePrefab, spawnPos, Quaternion.identity, parent);
                 
-                // Instantiate from the base prefab
-                GameObject newNodeObject = Instantiate(resourceNodePrefab, spawnPos, Quaternion.identity, resourceHolder.transform);
-                
-                // Get the ResourceNode component and initialize it with the correct data
                 ResourceNode node = newNodeObject.GetComponent<ResourceNode>();
                 if (node != null)
                 {
+                    // 3. Assign the unique ID and initialize the node
+                    node.uniqueId = resourceId;
                     node.Initialize(resourceSpawn.resourceData);
                 }
                 else
                 {
                     Debug.LogError("resourceNodePrefab does not have a ResourceNode component!", resourceNodePrefab);
                 }
-
-                return; // Stop after spawning one resource on this tile
+                return;
             }
         }
     }

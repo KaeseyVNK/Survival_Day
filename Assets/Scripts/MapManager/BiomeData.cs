@@ -16,6 +16,7 @@ public class BiomeData : ScriptableObject
 {
     [Header("Biome Info")]
     public string biomeName;
+    public Biome biomeType; // Link to the Biome enum
     
     [Tooltip("The types of tiles this biome can spawn resources on.")]
     public List<TileBase> compatibleTiles;

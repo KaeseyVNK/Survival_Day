@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 953a229534bc7b248824a73addd461b3, type: 3}
+  m_Name: RockBiome
+  m_EditorClassIdentifier: 
+  biomeName: Rock
+  biomeType: 1
+  compatibleTiles:
+  - {fileID: 11400000, guid: 10e80cc56d204e14caf7a00c18537070, type: 2}
+  resourceSpawns:
+  - resourceData: {fileID: 11400000, guid: 3bcc2cbf620de0b44850928e8b270e7c, type: 2}
+    spawnWeight: 0.001

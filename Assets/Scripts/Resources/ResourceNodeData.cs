@@ -11,7 +11,7 @@ public class ResourceNodeData : ScriptableObject
     public bool isTriggerable;
 
     [Header("Drop")]
-    public GameObject dropPrefab;
+    public DropItemData itemToDrop;
     public int minDropAmount = 1;
     public int maxDropAmount = 3;
 }

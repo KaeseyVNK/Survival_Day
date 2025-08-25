@@ -2,8 +2,6 @@ using UnityEngine;
 
 public static class MapUtilities
 {
-    public enum Biome { Water, Sand, Grass, Mountain }
-
     // Tạo Perlin Noise với Fractal
     public static float FractalPerlin(float x, float y, int octaves, float persistence, float lacunarity)
     {

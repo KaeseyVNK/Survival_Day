@@ -15,56 +15,41 @@ public class BiomeSmoothingSettings
 
 public class BiomeProcessor
 {
-    private int width, height;
-    private Biome[,] biomeMap;
-    
     public List<Vector2Int> debug_pixelsToFill = new List<Vector2Int>();
+    public BiomeProcessor() { }
 
-    public BiomeProcessor(int mapWidth, int mapHeight)
+    public void ProcessBiomes(ref Biome[,] biomeMap, BiomeSmoothingSettings settings)
     {
-        width = mapWidth;
-        height = mapHeight;
-    }
-
-    public void ProcessBiomes(Biome[,] inputBiomeMap, BiomeSmoothingSettings settings)
-    {
-        biomeMap = inputBiomeMap;
-        width = inputBiomeMap.GetLength(0);
-        height = inputBiomeMap.GetLength(1);
-        debug_pixelsToFill.Clear();
+        int width = biomeMap.GetLength(0);
+        int height = biomeMap.GetLength(1);
 
         for (int i = 0; i < settings.smoothingIterations; i++)
         {
-            SmoothMap(settings);
-            MajorityFilter(1);
-            EnforceBeachBuffer(1);
-            OpenBiome(Biome.Grass, Biome.Sand, iterations: settings.iterations);
-            OpenBiome(Biome.Water, Biome.Sand, iterations: settings.iterations);
-            RemoveDiagonalBridges(Biome.Grass, Biome.Sand);
-            RemoveDiagonalBridges(Biome.Water, Biome.Sand);
-            CutNarrowLandBridgesBetweenLakes(minGap: 6, iterations: settings.iterations);
-            CloseBiome(Biome.Grass, Biome.Sand, iterations: settings.iterations);
-            CloseBiome(Biome.Water, Biome.Sand, iterations: settings.iterations);
-            RemoveSmallIslands(Biome.Grass, 18, Biome.Sand);
-            RemoveSmallIslands(Biome.Water, 18, Biome.Sand);
-            MajorityFilter(1);
+            SmoothMap(ref biomeMap, settings, width, height);
+            MajorityFilter(ref biomeMap, 1, width, height);
         }
 
-        RemoveSmallGrassPatches(15);
-        RemoveSmallSandPatches(10);
-        AggressiveCleanup();
+        // Clean up small islands first
+        RemoveSmallIslands(ref biomeMap, Biome.Water, settings.waterCleanupThreshold * 2, Biome.Sand, width, height);
+        RemoveSmallIslands(ref biomeMap, Biome.Grass, settings.grassCleanupThreshold * 2, Biome.Sand, width, height);
+        
+        // Enforce a beach buffer between grass and water
+        EnforceBeachBuffer(ref biomeMap, 1, width, height);
+
+        // Perform aggressive final cleanup to remove tails and artifacts
+        AggressiveCleanup(ref biomeMap, width, height);
     }
 
-    private void SmoothMap(BiomeSmoothingSettings settings)
+    private void SmoothMap(ref Biome[,] biomeMap, BiomeSmoothingSettings settings, int width, int height)
     {
         Biome[,] oldBiomeMap = biomeMap.Clone() as Biome[,];
-        for (int y = 0; y < height; y++)
+        for (int y = 1; y < height - 1; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (int x = 1; x < width - 1; x++)
             {
-                int waterNeighbors = MapUtilities.GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Water, width, height);
-                int sandNeighbors = MapUtilities.GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Sand, width, height);
-                int grassNeighbors = MapUtilities.GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Grass, width, height);
+                int waterNeighbors = GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Water, width, height);
+                int sandNeighbors = GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Sand, width, height);
+                int grassNeighbors = GetSurroundingBiomeCount(oldBiomeMap, x, y, Biome.Grass, width, height);
                 Biome currentBiome = oldBiomeMap[x, y];
                 if (currentBiome == Biome.Grass)
                 {
@@ -82,13 +67,13 @@ public class BiomeProcessor
         }
     }
 
-    private void MajorityFilter(int iterations = 1)
+    private void MajorityFilter(ref Biome[,] biomeMap, int iterations, int width, int height)
     {
         for (int it = 0; it < iterations; it++)
         {
             Biome[,] src = biomeMap.Clone() as Biome[,];
-            for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
+            for (int y = 1; y < height - 1; y++)
+            for (int x = 1; x < width - 1; x++)
             {
                 int[] counts = new int[4];
                 for (int j = -1; j <= 1; j++)
@@ -96,7 +81,6 @@ public class BiomeProcessor
                 {
                     if (i == 0 && j == 0) continue;
                     int nx = x + i, ny = y + j;
-                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
                     counts[(int)src[nx, ny]]++;
                 }
                 int maxIdx = 0, maxCnt = counts[0];
@@ -106,37 +90,40 @@ public class BiomeProcessor
         }
     }
 
-    private void EnforceBeachBuffer(int radius = 1)
+    private void EnforceBeachBuffer(ref Biome[,] biomeMap, int radius, int width, int height)
     {
         var toSand = new List<Vector2Int>();
-        for (int y = 0; y < height; y++)
-        for (int x = 0; x < width; x++)
+        for (int y = radius; y < height - radius; y++)
+        for (int x = radius; x < width - radius; x++)
         {
             if (biomeMap[x, y] != Biome.Grass) continue;
+            bool nearWater = false;
             for (int j = -radius; j <= radius; j++)
-            for (int i = -radius; i <= radius; i++)
             {
-                if (i==0 && j==0) continue;
-                int nx = x + i, ny = y + j;
-                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                if (biomeMap[nx, ny] == Biome.Water)
+                for (int i = -radius; i <= radius; i++)
                 {
-                    toSand.Add(new Vector2Int(x, y));
-                    goto next_pixel;
+                    if (i == 0 && j == 0) continue;
+                    int nx = x + i, ny = y + j;
+                    if (biomeMap[nx, ny] == Biome.Water)
+                    {
+                        nearWater = true;
+                        break;
+                    }
                 }
+                if (nearWater) break;
             }
-            next_pixel:;
+            if (nearWater) toSand.Add(new Vector2Int(x, y));
         }
         foreach (var c in toSand) biomeMap[c.x, c.y] = Biome.Sand;
     }
 
-    private void RemoveSmallIslands(Biome target, int minSize, Biome fillWith)
+    private void RemoveSmallIslands(ref Biome[,] biomeMap, Biome target, int minSize, Biome fillWith, int width, int height)
     {
         bool[,] visited = new bool[width, height];
         var q = new Queue<Vector2Int>();
         var comp = new List<Vector2Int>();
-        for (int y = 0; y < height; y++)
-        for (int x = 0; x < width; x++)
+        for (int y = 1; y < height - 1; y++)
+        for (int x = 1; x < width - 1; x++)
         {
             if (visited[x, y] || biomeMap[x, y] != target) continue;
             comp.Clear(); q.Clear();
@@ -146,11 +133,11 @@ public class BiomeProcessor
             {
                 var p = q.Dequeue();
                 comp.Add(p);
-                int[] dx = {1,-1,0,0}, dy = {0,0,1,-1};
+                int[] dx = {1, -1, 0, 0}, dy = {0, 0, 1, -1};
                 for (int k = 0; k < 4; k++)
                 {
                     int nx = p.x + dx[k], ny = p.y + dy[k];
-                    if (nx<0||nx>=width||ny<0||ny>=height || visited[nx, ny] || biomeMap[nx, ny] != target) continue;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height || visited[nx, ny] || biomeMap[nx, ny] != target) continue;
                     visited[nx, ny] = true;
                     q.Enqueue(new Vector2Int(nx, ny));
                 }
@@ -160,7 +147,7 @@ public class BiomeProcessor
         }
     }
     
-    private void ErodeBiome(Biome target, Biome fillWith, int iterations = 1)
+    private void ErodeBiome(ref Biome[,] biomeMap, Biome target, Biome fillWith, int iterations, int width, int height)
     {
         for (int it = 0; it < iterations; it++)
         {
@@ -168,15 +155,15 @@ public class BiomeProcessor
             for (int y = 1; y < height - 1; y++)
             for (int x = 1; x < width - 1; x++)
             {
-                if (biomeMap[x,y] != target) continue;
-                if (biomeMap[x-1,y]!=target || biomeMap[x+1,y]!=target || biomeMap[x,y-1]!=target || biomeMap[x,y+1]!=target)
-                    toFill.Add(new Vector2Int(x,y));
+                if (biomeMap[x, y] != target) continue;
+                if (biomeMap[x - 1, y] != target || biomeMap[x + 1, y] != target || biomeMap[x, y - 1] != target || biomeMap[x, y + 1] != target)
+                    toFill.Add(new Vector2Int(x, y));
             }
             foreach(var p in toFill) biomeMap[p.x, p.y] = fillWith;
         }
     }
 
-    private void DilateBiome(Biome target, Biome fillFrom, int iterations = 1)
+    private void DilateBiome(ref Biome[,] biomeMap, Biome target, Biome fillFrom, int iterations, int width, int height)
     {
         for (int it = 0; it < iterations; it++)
         {
@@ -184,113 +171,112 @@ public class BiomeProcessor
             for (int y = 1; y < height - 1; y++)
             for (int x = 1; x < width - 1; x++)
             {
-                if (biomeMap[x,y] != fillFrom) continue;
-                if (biomeMap[x-1,y]==target || biomeMap[x+1,y]==target || biomeMap[x,y-1]==target || biomeMap[x,y+1]==target)
-                    toFill.Add(new Vector2Int(x,y));
+                if (biomeMap[x, y] != fillFrom) continue;
+                if (biomeMap[x - 1, y] == target || biomeMap[x + 1, y] == target || biomeMap[x, y - 1] == target || biomeMap[x, y + 1] == target)
+                    toFill.Add(new Vector2Int(x, y));
             }
             foreach(var p in toFill) biomeMap[p.x, p.y] = target;
         }
     }
 
-    private void OpenBiome(Biome target, Biome fillWith, int iterations = 1)
+    private void OpenBiome(ref Biome[,] biomeMap, Biome target, Biome fillWith, int iterations, int width, int height)
     {
-        ErodeBiome(target, fillWith, iterations:iterations);
-        DilateBiome(target, fillWith, iterations:iterations);
+        ErodeBiome(ref biomeMap, target, fillWith, iterations, width, height);
+        DilateBiome(ref biomeMap, target, fillFrom: fillWith, iterations, width, height);
     }
 
-    private void CloseBiome(Biome target, Biome fillFrom, int iterations = 1)
+    private void CloseBiome(ref Biome[,] biomeMap, Biome target, Biome fillFrom, int iterations, int width, int height)
     {
-        DilateBiome(target, fillFrom, iterations:iterations);
-        ErodeBiome(target, fillFrom, iterations:iterations);
+        DilateBiome(ref biomeMap, target, fillFrom, iterations, width, height);
+        ErodeBiome(ref biomeMap, target, fillFrom, iterations, width, height);
     }
 
-    private void RemoveDiagonalBridges(Biome target, Biome fillWith)
+    private void RemoveDiagonalBridges(ref Biome[,] biomeMap, Biome target, Biome fillWith, int width, int height)
     {
-        for (int y = 0; y < height-1; y++)
-        for (int x = 0; x < width-1; x++)
+        for (int y = 0; y < height - 1; y++)
+        for (int x = 0; x < width - 1; x++)
         {
-            if (biomeMap[x,y]==target && biomeMap[x+1,y+1]==target && biomeMap[x+1,y]!=target && biomeMap[x,y+1]!=target)
-                biomeMap[x+1,y] = fillWith;
-            if (biomeMap[x+1,y]==target && biomeMap[x,y+1]==target && biomeMap[x,y]!=target && biomeMap[x+1,y+1]!=target)
-                biomeMap[x,y] = fillWith;
+            if (biomeMap[x, y] == target && biomeMap[x + 1, y + 1] == target && biomeMap[x + 1, y] != target && biomeMap[x, y + 1] != target)
+                biomeMap[x + 1, y] = fillWith;
+            if (biomeMap[x + 1, y] == target && biomeMap[x, y + 1] == target && biomeMap[x, y] != target && biomeMap[x + 1, y + 1] != target)
+                biomeMap[x, y] = fillWith;
         }
     }
 
-    private void CutNarrowLandBridgesBetweenLakes(int minGap = 2, int iterations = 2)
+    private void CutNarrowLandBridgesBetweenLakes(ref Biome[,] biomeMap, int minGap, int iterations, int width, int height)
     {
         for (int it = 0; it < iterations; it++)
         {
-            int[,] waterId = LabelWaterComponents(out _);
+            int[,] waterId = LabelWaterComponents(biomeMap, out _, width, height);
             var toWater = new List<Vector2Int>();
-            for (int y=1; y<height-1; y++)
-            for (int x=1; x<width-1; x++)
+            for (int y = 1; y < height - 1; y++)
+            for (int x = 1; x < width - 1; x++)
             {
-                if (biomeMap[x,y] == Biome.Water) continue;
-                int L = waterId[x-1,y], R = waterId[x+1,y], U = waterId[x,y+1], D = waterId[x,y-1];
-                if ((L>0 && R>0 && L!=R) || (U>0 && D>0 && U!=D))
-                    toWater.Add(new Vector2Int(x,y));
+                if (biomeMap[x, y] == Biome.Water) continue;
+                int L = waterId[x - 1, y], R = waterId[x + 1, y], U = waterId[x, y + 1], D = waterId[x, y - 1];
+                if ((L > 0 && R > 0 && L != R) || (U > 0 && D > 0 && U != D))
+                    toWater.Add(new Vector2Int(x, y));
             }
             if (toWater.Count == 0) break;
             foreach (var p in toWater) biomeMap[p.x, p.y] = Biome.Water;
         }
-        EnforceBeachBuffer(1);
+        EnforceBeachBuffer(ref biomeMap, 1, width, height);
     }
 
-    private int[,] LabelWaterComponents(out int compCount)
+    private int[,] LabelWaterComponents(Biome[,] biomeMap, out int compCount, int width, int height)
     {
         int[,] id = new int[width, height];
         compCount = 0;
         var q = new Queue<Vector2Int>();
-        for (int y=0; y<height; y++)
-        for (int x=0; x<width; x++)
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
         {
-            if (biomeMap[x,y] != Biome.Water || id[x,y] != 0) continue;
+            if (biomeMap[x, y] != Biome.Water || id[x, y] != 0) continue;
             compCount++;
-            id[x,y] = compCount;
-            q.Enqueue(new Vector2Int(x,y));
+            id[x, y] = compCount;
+            q.Enqueue(new Vector2Int(x, y));
             while (q.Count > 0)
             {
                 var p = q.Dequeue();
-                int[] dx={1,-1,0,0}, dy={0,0,1,-1};
-                for (int k=0;k<4;k++)
+                int[] dx = {1, -1, 0, 0}, dy = {0, 0, 1, -1};
+                for (int k = 0; k < 4; k++)
                 {
-                    int nx=p.x+dx[k], ny=p.y+dy[k];
-                    if (nx<0||nx>=width||ny<0||ny>=height || biomeMap[nx,ny] != Biome.Water || id[nx,ny] != 0) continue;
-                    id[nx,ny] = compCount;
-                    q.Enqueue(new Vector2Int(nx,ny));
+                    int nx = p.x + dx[k], ny = p.y + dy[k];
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height || biomeMap[nx, ny] != Biome.Water || id[nx, ny] != 0) continue;
+                    id[nx, ny] = compCount;
+                    q.Enqueue(new Vector2Int(nx, ny));
                 }
             }
         }
         return id;
     }
 
-    private void RemoveSmallGrassPatches(int minSize) { RemoveSmallIslands(Biome.Grass, minSize, Biome.Sand); }
-    private void RemoveSmallSandPatches(int minSize) { RemoveSmallIslandsNotTouchingWater(Biome.Sand, minSize, Biome.Grass); }
+    private void RemoveSmallGrassPatches(ref Biome[,] biomeMap, int minSize, int width, int height) { RemoveSmallIslands(ref biomeMap, Biome.Grass, minSize, Biome.Sand, width, height); }
+    private void RemoveSmallSandPatches(ref Biome[,] biomeMap, int minSize, int width, int height) { RemoveSmallIslandsNotTouchingWater(ref biomeMap, Biome.Sand, minSize, Biome.Grass, width, height); }
 
-    private void RemoveSmallIslandsNotTouchingWater(Biome target, int minSize, Biome fillWith)
+    private void RemoveSmallIslandsNotTouchingWater(ref Biome[,] biomeMap, Biome target, int minSize, Biome fillWith, int width, int height)
     {
         bool[,] visited = new bool[width, height];
         var q = new Queue<Vector2Int>();
-        var comp = new List<Vector2Int>();
-        for (int y = 0; y < height; y++)
-        for (int x = 0; x < width; x++)
+        for (int y = 1; y < height - 1; y++)
+        for (int x = 1; x < width - 1; x++)
         {
             if (visited[x, y] || biomeMap[x, y] != target) continue;
-            comp.Clear(); q.Clear();
+            var currentComp = new List<Vector2Int>();
+            q.Clear();
             q.Enqueue(new Vector2Int(x, y));
             visited[x, y] = true;
             bool touchesWater = false;
-            var currentComp = new List<Vector2Int>();
             while (q.Count > 0)
             {
                 var p = q.Dequeue();
                 currentComp.Add(p);
-                if (!touchesWater && MapUtilities.IsNearBiome(biomeMap, p.x, p.y, Biome.Water, 1, width, height)) touchesWater = true;
-                int[] dx = {1,-1,0,0}, dy = {0,0,1,-1};
+                if (!touchesWater && IsNearBiome(biomeMap, p.x, p.y, Biome.Water, 1, width, height)) touchesWater = true;
+                int[] dx = {1, -1, 0, 0}, dy = {0, 0, 1, -1};
                 for (int k = 0; k < 4; k++)
                 {
                     int nx = p.x + dx[k], ny = p.y + dy[k];
-                    if (nx<0||nx>=width||ny<0||ny>=height || visited[nx, ny] || biomeMap[nx, ny] != target) continue;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height || visited[nx, ny] || biomeMap[nx, ny] != target) continue;
                     visited[nx, ny] = true;
                     q.Enqueue(new Vector2Int(nx, ny));
                 }
@@ -300,16 +286,16 @@ public class BiomeProcessor
         }
     }
     
-    private void AggressiveCleanup()
+    private void AggressiveCleanup(ref Biome[,] biomeMap, int width, int height)
     {
-        for (int i = 0; i < 3; i++) { RemoveSimpleTails(); MajorityFilter(1); }
-        MajorityFilter(5);
-        ApplyLowConnectivityRule(Biome.Grass, Biome.Sand, minNeighbors: 4, iterations: 6);
-        ApplyLowConnectivityRule(Biome.Water, Biome.Sand, minNeighbors: 4, iterations: 6);
-        MajorityFilter(1);
+        for (int i = 0; i < 3; i++) { RemoveSimpleTails(ref biomeMap, width, height); MajorityFilter(ref biomeMap, 1, width, height); }
+        MajorityFilter(ref biomeMap, 5, width, height);
+        ApplyLowConnectivityRule(ref biomeMap, Biome.Grass, Biome.Sand, 4, 6, width, height);
+        ApplyLowConnectivityRule(ref biomeMap, Biome.Water, Biome.Sand, 4, 6, width, height);
+        MajorityFilter(ref biomeMap, 1, width, height);
     }
 
-    private Biome GetMostCommonNeighbor(int x, int y)
+    private Biome GetMostCommonNeighbor(Biome[,] biomeMap, int x, int y, int width, int height)
     {
         int[] counts = new int[4];
         for (int j = -1; j <= 1; j++)
@@ -317,64 +303,64 @@ public class BiomeProcessor
         {
             if (i == 0 && j == 0) continue;
             int nx = x + i, ny = y + j;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) counts[(int)biomeMap[nx, ny]]++;
+            counts[(int)biomeMap[nx, ny]]++;
         }
         int maxIdx = 0;
         for (int k = 1; k < 4; k++) if (counts[k] > counts[maxIdx]) maxIdx = k;
         return (Biome)maxIdx;
     }
 
-    private void ApplyLowConnectivityRule(Biome target, Biome fillWith, int minNeighbors, int iterations)
+    private void ApplyLowConnectivityRule(ref Biome[,] biomeMap, Biome target, Biome fillWith, int minNeighbors, int iterations, int width, int height)
     {
         for (int it = 0; it < iterations; it++)
         {
             var toFill = new List<Vector2Int>();
-            for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
+            for (int y = 1; y < height - 1; y++)
+            for (int x = 1; x < width - 1; x++)
             {
-                if (biomeMap[x,y] != target) continue;
+                if (biomeMap[x, y] != target) continue;
                 int sameNeighbors = 0;
                 for (int j = -1; j <= 1; j++)
                 for (int i = -1; i <= 1; i++)
                 {
                     if (i == 0 && j == 0) continue;
                     int nx = x + i, ny = y + j;
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height && biomeMap[nx, ny] == target) 
+                    if (biomeMap[nx, ny] == target) 
                         sameNeighbors++;
                 }
-                if (sameNeighbors < minNeighbors) toFill.Add(new Vector2Int(x,y));
+                if (sameNeighbors < minNeighbors) toFill.Add(new Vector2Int(x, y));
             }
             if (toFill.Count == 0) break;
             debug_pixelsToFill.AddRange(toFill.Where(p => !debug_pixelsToFill.Contains(p)));
-            foreach (var p in toFill) biomeMap[p.x,p.y] = fillWith;
+            foreach (var p in toFill) biomeMap[p.x, p.y] = fillWith;
         }
     }
 
-    private void RemoveSimpleTails()
+    private void RemoveSimpleTails(ref Biome[,] biomeMap, int width, int height)
     {
         var toChange = new List<(Vector2Int pos, Biome newBiome)>();
-        for (int y = 0; y < height; y++)
-        for (int x = 0; x < width; x++)
+        for (int y = 1; y < height - 1; y++)
+        for (int x = 1; x < width - 1; x++)
         {
             Biome center = biomeMap[x, y];
             int cardinalNeighbors = 0;
-            if (x > 0 && biomeMap[x-1, y] == center) cardinalNeighbors++;
-            if (x < width - 1 && biomeMap[x+1, y] == center) cardinalNeighbors++;
-            if (y > 0 && biomeMap[x, y-1] == center) cardinalNeighbors++;
-            if (y < height - 1 && biomeMap[x, y+1] == center) cardinalNeighbors++;
+            if (biomeMap[x - 1, y] == center) cardinalNeighbors++;
+            if (biomeMap[x + 1, y] == center) cardinalNeighbors++;
+            if (biomeMap[x, y - 1] == center) cardinalNeighbors++;
+            if (biomeMap[x, y + 1] == center) cardinalNeighbors++;
 
             int totalNeighbors = 0;
             for (int j = -1; j <= 1; j++)
             for (int i = -1; i <= 1; i++)
             {
-                if (i==0 && j==0) continue;
+                if (i == 0 && j == 0) continue;
                 int nx = x + i, ny = y + j;
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height && biomeMap[nx, ny] == center) 
+                if (biomeMap[nx, ny] == center) 
                     totalNeighbors++;
             }
 
             if (cardinalNeighbors <= 1 || (cardinalNeighbors == 2 && totalNeighbors < 4) || totalNeighbors < 3)
-                toChange.Add((new Vector2Int(x, y), GetMostCommonNeighbor(x, y)));
+                toChange.Add((new Vector2Int(x, y), GetMostCommonNeighbor(biomeMap, x, y, width, height)));
         }
         foreach (var change in toChange)
             biomeMap[change.pos.x, change.pos.y] = change.newBiome;

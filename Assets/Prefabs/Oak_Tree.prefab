@@ -146,7 +146,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f5b8e7f23189ce748a1afa123eb7757b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  resourceData: {fileID: 11400000, guid: 898a0ceb84df2994fbbcbec5044d37bd, type: 2}
+  dropParent: {fileID: 0}
+  dropItemPrefab: {fileID: 6457997545647144893, guid: 0c9618c1dc76e6d4d852cc91500872fb, type: 3}
+  uniqueId: 
   currentHealth: 0
 --- !u!1 &8044404566045516629
 GameObject:

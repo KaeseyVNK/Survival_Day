@@ -71,6 +71,4 @@ public class Player : Entity
         lastDirection = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
     }
 }
-
-
 }

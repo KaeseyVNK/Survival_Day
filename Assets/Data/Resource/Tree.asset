@@ -15,6 +15,7 @@ MonoBehaviour:
   resourceName: Tree
   sprite: {fileID: -7320068096882973064, guid: e634c9511de49764a9cfd7e49a5de5dd, type: 3}
   maxHealth: 60
-  dropPrefab: {fileID: 6457997545647144893, guid: 0c9618c1dc76e6d4d852cc91500872fb, type: 3}
+  isTriggerable: 0
+  itemToDrop: {fileID: 11400000, guid: d61100df906fc8a4c9f1c1a820873bde, type: 2}
   minDropAmount: 1
   maxDropAmount: 3
