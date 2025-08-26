@@ -20,7 +20,7 @@ public class UI_Hotbar : MonoBehaviour
         inventoryManager = InventoryManager.instance;
         if (inventoryManager != null)
         {
-            inventoryManager.OnInventoryChanged += UpdateHotbarSlots;
+            inventoryManager.OnHotbarChanged += UpdateHotbarSlots; // Thay đổi sự kiện
             inventoryManager.OnSelectedSlotChanged += UpdateSelection;
         }
 
@@ -33,7 +33,7 @@ public class UI_Hotbar : MonoBehaviour
     {
         if (inventoryManager != null)
         {
-            inventoryManager.OnInventoryChanged -= UpdateHotbarSlots;
+            inventoryManager.OnHotbarChanged -= UpdateHotbarSlots; // Thay đổi sự kiện
             inventoryManager.OnSelectedSlotChanged -= UpdateSelection;
         }
     }
@@ -69,6 +69,8 @@ public class UI_Hotbar : MonoBehaviour
             UI_Slot newSlotScript = newSlot.GetComponent<UI_Slot>();
             if (newSlotScript != null)
             {
+                newSlotScript.slotType = SlotType.Hotbar;
+                newSlotScript.slotIndex = i;
                 hotbarSlots.Add(newSlotScript);
             }
             else
@@ -83,17 +85,12 @@ public class UI_Hotbar : MonoBehaviour
         if (inventoryManager == null) return;
 
         for (int i = 0; i < hotbarSlots.Count; i++)
-        // for (int i = hotbarSlots.Count - 1; i >= 0; i--)
         {
-            if (i < inventoryManager.inventory.Count)
+            // hotbarItems là một mảng, có thể chứa giá trị null
+            // UpdateSlot đã có thể xử lý trường hợp item là null
+            if (i < inventoryManager.hotbarItems.Length)
             {
-                // Nếu có vật phẩm trong túi đồ ở vị trí này, hiển thị nó
-                hotbarSlots[i].UpdateSlot(inventoryManager.inventory[i]);
-            }
-            else
-            {
-                // Nếu không, hiển thị ô trống
-                hotbarSlots[i].UpdateSlot(null);
+                hotbarSlots[i].UpdateSlot(inventoryManager.hotbarItems[i]);
             }
         }
     }

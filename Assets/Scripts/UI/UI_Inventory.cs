@@ -40,25 +40,33 @@ public class UI_Inventory : MonoBehaviour
 
     private void CreateSlots()
     {
-        for (int i = 0; i < inventory.sizeInventory; i++)
+        for (int i = 0; i < inventory.mainInventorySize; i++)
         {
             GameObject newSlot = Instantiate(slotPrefab, slotContainer);
-            slotScripts.Add(newSlot.GetComponent<UI_Slot>());
+            UI_Slot slotScript = newSlot.GetComponent<UI_Slot>();
+            if (slotScript != null)
+            {
+                slotScript.slotType = SlotType.MainInventory;
+                slotScript.slotIndex = i;
+                slotScripts.Add(slotScript);
+            }
         }
     }
 
     private void UpdateDisplay()
     {
+        // Lặp qua tất cả các slot UI đã được tạo
         for (int i = 0; i < slotScripts.Count; i++)
         {
-            if (i < inventory.inventory.Count)
+            // Đảm bảo rằng index không vượt quá giới hạn của mảng inventory
+            if (i < inventory.mainInventory.Length)
             {
-                // Nếu có vật phẩm ở vị trí này, cập nhật slot
-                slotScripts[i].UpdateSlot(inventory.inventory[i]);
+                // Cập nhật slot với item tương ứng (có thể là null)
+                slotScripts[i].UpdateSlot(inventory.mainInventory[i]);
             }
             else
             {
-                // Nếu không, xóa thông tin slot
+                // Nếu có nhiều slot UI hơn item data (không nên xảy ra), hãy xóa nó
                 slotScripts[i].UpdateSlot(null);
             }
         }
