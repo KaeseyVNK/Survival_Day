@@ -74,7 +74,7 @@ public class UI_CraftingWindow : MonoBehaviour
     private void HandleCraftingGridChanged(UI_CraftingSlot changedSlot)
     {
         // 1. Lấy pattern hiện tại từ craftingGridSlots.
-        List<DropItemData> currentPattern = new List<DropItemData>();
+        List<ItemData> currentPattern = new List<ItemData>(); // << THAY ĐỔI
         foreach (var slot in craftingGridSlots)
         {
             if (slot.currentItem != null)

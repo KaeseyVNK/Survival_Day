@@ -24,15 +24,32 @@ public class PLayer_IdleState : PlayerState
         if (player.moveInput.x != 0 || player.moveInput.y != 0)
             stateMachine.ChangeState(player.runState);
 
-        if (Input.GetKeyDown(KeyCode.Space))
+        // Kiểm tra input tấn công
+        if (Input.GetMouseButtonDown(0)) // 0 là chuột trái
         {
-            player.SetVelocity(0, 0);
-            stateMachine.ChangeState(player.axeState);
-        }
+            // Lấy item đang được chọn trên hotbar
+            InventoryItem selectedItem = inventoryManager.hotbarItems[inventoryManager.selectedSlot];
 
-        if (Input.GetKeyDown(KeyCode.F)){
-            player.SetVelocity(0, 0);
-            stateMachine.ChangeState(player.axeExpState);
+            // Nếu không cầm gì thì thôi
+            if (selectedItem == null || !(selectedItem.data is ToolItemData))
+            {
+                // Có thể thêm state đấm tay không ở đây trong tương lai
+                return;
+            }
+
+            ToolItemData tool = selectedItem.data as ToolItemData;
+
+            // Dựa vào loại công cụ để chuyển sang state tương ứng
+            switch (tool.toolType)
+            {
+                case ToolType.Axe:
+                    stateMachine.ChangeState(player.axeExpState);
+                    break;
+                case ToolType.Pickaxe:
+                    stateMachine.ChangeState(player.pickaxeState);
+                    break;
+                // Thêm các trường hợp khác cho các công cụ khác
+            }
         }
     }
 }

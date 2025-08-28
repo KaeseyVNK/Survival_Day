@@ -86,8 +86,6 @@ public class UI_Hotbar : MonoBehaviour
 
         for (int i = 0; i < hotbarSlots.Count; i++)
         {
-            // hotbarItems là một mảng, có thể chứa giá trị null
-            // UpdateSlot đã có thể xử lý trường hợp item là null
             if (i < inventoryManager.hotbarItems.Length)
             {
                 hotbarSlots[i].UpdateSlot(inventoryManager.hotbarItems[i]);

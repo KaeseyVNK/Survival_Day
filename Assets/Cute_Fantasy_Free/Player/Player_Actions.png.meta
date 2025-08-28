@@ -172,12 +172,12 @@ TextureImporter:
       name: Player_Actions_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 528
-        width: 48
-        height: 48
+        x: 56
+        y: 536
+        width: 32
+        height: 32
       alignment: 9
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.3}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -194,12 +194,12 @@ TextureImporter:
       name: Player_Actions_1
       rect:
         serializedVersion: 2
-        x: 48
-        y: 528
-        width: 48
-        height: 48
+        x: 8
+        y: 536
+        width: 32
+        height: 32
       alignment: 9
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.3}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []

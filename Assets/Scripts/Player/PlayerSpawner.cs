@@ -15,8 +15,8 @@ public class PlayerSpawner : MonoBehaviour
     {
         // Auto-find references if they aren't assigned in the inspector
         if (playerTransform == null) playerTransform = GameObject.FindGameObjectWithTag("Player")?.transform;
-        if (mapGenerator == null) mapGenerator = FindObjectOfType<PerlinMapGenerator>();
-        if (chunkManager == null) chunkManager = FindObjectOfType<ChunkManager>();
+        if (mapGenerator == null) mapGenerator = FindFirstObjectByType<PerlinMapGenerator>();
+        if (chunkManager == null) chunkManager = FindFirstObjectByType<ChunkManager>();
 
         if (playerTransform == null || mapGenerator == null || chunkManager == null)
         {

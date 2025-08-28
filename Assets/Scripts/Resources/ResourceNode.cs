@@ -6,6 +6,7 @@ public class ResourceNode : MonoBehaviour, IDamageable
 {
     // Make this field private, it should only be set through Initialize
     private ResourceNodeData resourceData;
+    public ResourceNodeData Data => resourceData; // Thêm một property để bên ngoài có thể đọc data
 
     public GameObject dropParent;
 
@@ -99,7 +100,7 @@ public class ResourceNode : MonoBehaviour, IDamageable
             Vector3 randomOffset = new Vector3(transform.position.x + randomX, transform.position.y + randomY, 0);
 
             GameObject newDrop = Instantiate(dropItemPrefab, randomOffset, Quaternion.identity, dropParent.transform);
-            newDrop.GetComponent<DropItem>().dropItemData = resourceData.itemToDrop;
+            newDrop.GetComponent<DropItem>().itemData = resourceData.itemToDrop;
         }
 
         Destroy(gameObject);

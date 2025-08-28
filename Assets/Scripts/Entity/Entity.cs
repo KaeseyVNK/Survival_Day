@@ -4,7 +4,7 @@ public class Entity : MonoBehaviour
 {
     public Animator anim { get; private set; }
     public Rigidbody2D rb { get; private set; }
-    protected StateMachine stateMachine;
+    public StateMachine stateMachine { get; private set; }
 
     public bool isFacingRight = true;
     public int facingDir { get; private set; } = 1;

@@ -3,6 +3,8 @@ using UnityEngine;
 public class Player : Entity
 {
     public static Player instance;
+
+
     public Player_Input input { get; private set; }
 
 
@@ -11,6 +13,7 @@ public class Player : Entity
     public Player_Run runState { get; private set; }
     public Player_Axe axeState { get; private set; }
     public Player_Axe_Exp axeExpState { get; private set; }
+    public Player_Pickaxe pickaxeState { get; private set; }
 
 
 
@@ -36,6 +39,7 @@ public class Player : Entity
         runState = new Player_Run(this, stateMachine, "run");
         axeState = new Player_Axe(this, stateMachine, "Axe");
         axeExpState = new Player_Axe_Exp(this, stateMachine, "axe");
+        pickaxeState = new Player_Pickaxe(this, stateMachine, "pickaxe");
     }
 
     protected override void Start()

@@ -18,6 +18,14 @@ public class Entity_AnimationTriggers : MonoBehaviour
 
     private void AttackTrigger()
     {
-        entityCombat.PerformAttack();
+        // Phải gọi hàm PerformAttack thông qua Reflection vì nó là protected
+        var performAttackMethod = typeof(Enity_Combat).GetMethod("PerformAttack", 
+            System.Reflection.BindingFlags.NonPublic | 
+            System.Reflection.BindingFlags.Instance);
+            
+        if (performAttackMethod != null)
+        {
+            performAttackMethod.Invoke(entityCombat, null);
+        }
     }
 }

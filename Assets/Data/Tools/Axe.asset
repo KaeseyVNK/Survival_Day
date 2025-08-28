@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96d38c0f7b090074881c3b510cb2fc15, type: 3}
+  m_Name: Axe
+  m_EditorClassIdentifier: 
+  id: axe1
+  itemName: Wood_Axe
+  sprite: {fileID: -4885373251318296212, guid: ab40d61234c50c24599e7308413df63f, type: 3}
+  toolType: 0
+  durability: 100
+  damage: 10

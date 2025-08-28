@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class DropItem : MonoBehaviour
 {
-    public DropItemData dropItemData;
+    public ItemData itemData; // << THAY ĐỔI TỪ DropItemData
 
     public bool isTrigger = true;
 
@@ -18,7 +18,7 @@ public class DropItem : MonoBehaviour
 
     private void Start()
     {
-        GetComponentInChildren<SpriteRenderer>().sprite = dropItemData.sprite;
+        GetComponentInChildren<SpriteRenderer>().sprite = itemData.sprite;
     }
 
     public void Pickup(){

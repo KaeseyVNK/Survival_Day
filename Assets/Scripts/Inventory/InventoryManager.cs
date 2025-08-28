@@ -10,16 +10,16 @@ public enum SlotType { MainInventory, Hotbar, Crafting, Result }
 [System.Serializable]
 public class InventoryItem
 {
-    public DropItemData data;
+    public ItemData data; // << THAY ĐỔI TỪ DropItemData SANG ItemData
     public int quantity;
 
-    public InventoryItem(DropItemData data)
+    public InventoryItem(ItemData data) // << THAY ĐỔI
     {
         this.data = data;
         this.quantity = 1;
     }
 
-    public InventoryItem(DropItemData data, int quantity)
+    public InventoryItem(ItemData data, int quantity) // << THAY ĐỔI
     {
         this.data = data;
         this.quantity = quantity;
@@ -45,6 +45,9 @@ public class InventoryManager : MonoBehaviour
     public event System.Action OnInventoryChanged; // Cho túi đồ chính
     public event System.Action OnHotbarChanged;    // Cho thanh hotbar
     public event System.Action<int> OnSelectedSlotChanged;
+
+    [Header("Starting Items")]
+    [SerializeField] private List<ItemData> startingItems; // << THÊM DÒNG NÀY
 
     // --- Inventory Settings ---
     [Header("Inventory Settings")]
@@ -76,7 +79,19 @@ public class InventoryManager : MonoBehaviour
         }
     }
 
-    public void AddItem(DropItemData itemData)
+    private void Start()
+    {
+        // Thêm các vật phẩm khởi đầu vào túi đồ
+        foreach (var item in startingItems)
+        {
+            if (item != null)
+            {
+                AddItem(item);
+            }
+        }
+    }
+
+    public void AddItem(ItemData itemData) // << THAY ĐỔI
     {
         // --- Giai đoạn 1: Cố gắng cộng dồn (Stack) ---
 

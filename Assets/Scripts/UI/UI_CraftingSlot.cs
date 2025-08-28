@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 // Lớp này gần giống với UI_Slot nhưng được chuyên biệt hóa cho việc chế tạo.
 // Nó cần thông báo cho cửa sổ chế tạo chính mỗi khi nội dung của nó thay đổi.
 // Thêm IPointerDownHandler để có thể bắt sự kiện click chuột
-public class UI_CraftingSlot : UI_Slot, IPointerDownHandler
+public class UI_CraftingSlot : UI_Slot, IPointerDownHandler, IPointerClickHandler
 {
     // Thêm một sự kiện để thông báo cho Crafting Window khi slot này thay đổi
     public event System.Action<UI_CraftingSlot> OnSlotChanged;
@@ -20,13 +20,12 @@ public class UI_CraftingSlot : UI_Slot, IPointerDownHandler
     // Ghi đè phương thức OnDrop để xử lý logic riêng cho crafting
     public override void OnDrop(PointerEventData eventData)
     {
-        // Debug.Log($"<color=orange>[OnDrop]</color> Đã nhận sự kiện thả vào slot: <b>{gameObject.name}</b>");
-
         if (sourceSlot == null || sourceSlot == this)
         {
-            // Debug.LogWarning("[OnDrop] Bỏ qua: Nguồn không hợp lệ hoặc thả vào chính nó.");
             return;
         }
+
+        UI_Slot originalSourceSlot = sourceSlot; // Giữ lại tham chiếu đến ô gốc
 
         // --- LOGIC HOÁN ĐỔI VÀ SAO CHÉP MỚI ---
         
@@ -66,6 +65,10 @@ public class UI_CraftingSlot : UI_Slot, IPointerDownHandler
         }
         
         CleanUpDrag();
+
+        // --- SỬA BUG ---
+        // Tương tự như UI_Slot, gọi UpdateSlot một lần cuối cho ô gốc để khôi phục lại giao diện
+        originalSourceSlot.UpdateSlot(originalSourceSlot.currentItem);
     }
 
     // Một phương thức mới để cập nhật slot mà không cần kéo/thả (ví dụ: khi load game)
@@ -85,6 +88,65 @@ public class UI_CraftingSlot : UI_Slot, IPointerDownHandler
             
             // Tìm đến cửa sổ chế tạo cha và gọi hàm để thực hiện chế tạo
             GetComponentInParent<UI_CraftingWindow>()?.OnResultSlotClicked();
+        }
+    }
+
+    // Ghi đè phương thức OnPointerClick để xử lý logic chia stack cho lưới chế tạo
+    public override void OnPointerClick(PointerEventData eventData)
+    {
+        // Chỉ hoạt động khi đang kéo một vật phẩm và người dùng nhấn chuột phải
+        if (draggableInstance == null || eventData.button != PointerEventData.InputButton.Right)
+        {
+            return;
+        }
+
+        InventoryItem sourceItem = sourceSlot.currentItem;
+        
+        // Không thể chia stack nếu chỉ còn 1 item
+        if (sourceItem.quantity <= 1) return;
+
+        // Trường hợp 1: Ô crafting này trống
+        if (this.currentItem == null)
+        {
+            // Tạo một BẢN SAO MỚI với số lượng là 1 và đặt vào ô này
+            SetItem(new InventoryItem(sourceItem.data, 1));
+        }
+        // Trường hợp 2: Ô crafting này có cùng loại item
+        else if (this.currentItem.data.id == sourceItem.data.id)
+        {
+            // Tăng số lượng của item hiện tại lên 1
+            this.currentItem.quantity++;
+            // Cập nhật lại slot (quan trọng để kích hoạt OnSlotChanged)
+            SetItem(this.currentItem);
+        }
+        else
+        {
+            // Nếu ô đích có item khác loại, không làm gì cả
+            return;
+        }
+
+        // --- Cập nhật lại ô nguồn ---
+        sourceItem.quantity--; // Giảm số lượng
+
+        // Nếu nguồn cũng là một ô crafting
+        if (sourceSlot is UI_CraftingSlot sourceCraftingSlot)
+        {
+            sourceCraftingSlot.SetItem(sourceItem);
+        }
+        // Nếu nguồn là từ inventory/hotbar
+        else
+        {
+            InventoryManager.instance.SetItem(sourceSlot.slotType, sourceSlot.slotIndex, sourceItem);
+        }
+        
+        // Cập nhật lại số lượng trên icon đang kéo
+        draggableInstance.GetComponent<DraggableItem>()?.UpdateQuantity(sourceItem.quantity);
+
+        // Nếu stack nguồn đã hết, kết thúc kéo thả
+        if (sourceItem.quantity <= 0)
+        {
+            InventoryManager.instance.SetItem(sourceSlot.slotType, sourceSlot.slotIndex, null);
+            CleanUpDrag();
         }
     }
 }

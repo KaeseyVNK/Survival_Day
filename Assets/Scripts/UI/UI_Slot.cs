@@ -1,11 +1,9 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems; // Thêm thư viện Event Systems
+using UnityEngine.EventSystems; 
 using UnityEngine.UI;
 
-// Định nghĩa SlotType đã được chuyển sang file InventoryManager.cs để tránh trùng lặp
-
-public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerClickHandler
 {
     [Header("Components")]
     [SerializeField] protected Image itemIcon;
@@ -51,17 +49,36 @@ public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragH
     public void UpdateSlot(InventoryItem item)
     {
         currentItem = item; // Cập nhật item hiện tại của slot
+
+        // --- SỬA BUG ---
+        // Chỉ reset lại màu sắc nếu ô này KHÔNG PHẢI là ô gốc của một thao tác kéo thả đang diễn ra.
+        // Điều này giữ cho hiệu ứng "mờ" không bị mất đi khi chia stack.
+        if (sourceSlot != this)
+        {
+            if (item != null)
+            {
+                itemIcon.color = Color.white;
+                quantityText.color = new Color(quantityText.color.r, quantityText.color.g, quantityText.color.b, 1f);
+            }
+        }
+        // --- KẾT THÚC SỬA BUG ---
+
         if (item != null)
         {
-            // Luôn reset màu sắc về trạng thái ban đầu khi cập nhật slot
-            itemIcon.color = Color.white;
-            quantityText.color = new Color(quantityText.color.r, quantityText.color.g, quantityText.color.b, 1f);
-
             itemIcon.gameObject.SetActive(true);
             quantityText.gameObject.SetActive(true);
 
             itemIcon.sprite = item.data.sprite;
-            quantityText.text = item.quantity.ToString();
+            // Chỉ hiển thị số lượng nếu > 1
+            if (item.quantity > 1)
+            {
+                quantityText.gameObject.SetActive(true);
+                quantityText.text = item.quantity.ToString();
+            }
+            else
+            {
+                quantityText.gameObject.SetActive(false);
+            }
         }
         else
         {
@@ -114,6 +131,8 @@ public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragH
             return; // Bỏ qua nếu không có gì để thả, hoặc thả vào chính nó
         }
 
+        UI_Slot originalSourceSlot = sourceSlot; // Giữ lại tham chiếu đến ô gốc
+
         // --- SỬA LỖI CUỐI CÙNG: Xử lý trường hợp kéo-thả từ ô KẾT QUẢ ---
         var sourceAsCraftingSlot = sourceSlot as UI_CraftingSlot;
         if (sourceAsCraftingSlot != null && sourceAsCraftingSlot.slotType == SlotType.Result)
@@ -164,6 +183,11 @@ public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragH
 
         // Dọn dẹp sau khi thả thành công
         CleanUpDrag();
+
+        // --- SỬA BUG ---
+        // Sau khi mọi thứ đã xong và sourceSlot đã bị xóa,
+        // gọi UpdateSlot một lần cuối cho ô gốc để đảm bảo nó được khôi phục lại trạng thái bình thường.
+        originalSourceSlot.UpdateSlot(originalSourceSlot.currentItem);
     }
 
     public void OnEndDrag(PointerEventData eventData)
@@ -172,12 +196,17 @@ public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragH
         // Nếu draggableInstance vẫn còn tồn tại ở đây, có nghĩa là người dùng đã thả item ra ngoài một slot hợp lệ.
         if (draggableInstance != null)
         {
-            // Phục hồi lại trạng thái của slot gốc
-            if(sourceSlot != null)
-            {
-                sourceSlot.UpdateSlot(sourceSlot.currentItem);
-            }
+            UI_Slot originalSourceSlot = sourceSlot; // Giữ lại tham chiếu đến ô gốc
+            
+            // Dọn dẹp TRƯỚC
             CleanUpDrag();
+
+            // --- SỬA BUG ---
+            // Sau khi dọn dẹp (sourceSlot đã là null), gọi UpdateSlot để khôi phục lại trạng thái cho ô gốc
+            if(originalSourceSlot != null)
+            {
+                originalSourceSlot.UpdateSlot(originalSourceSlot.currentItem);
+            }
         }
     }
 
@@ -192,5 +221,56 @@ public class UI_Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragH
         }
         sourceSlot = null;
         draggableInstance = null;
+    }
+
+    /// <summary>
+    /// Xử lý sự kiện click chuột, đặc biệt là chuột phải để chia stack.
+    /// </summary>
+    public virtual void OnPointerClick(PointerEventData eventData)
+    {
+        // Chỉ hoạt động khi đang kéo một vật phẩm và người dùng nhấn chuột phải
+        if (draggableInstance == null || eventData.button != PointerEventData.InputButton.Right)
+        {
+            return;
+        }
+
+        // --- BẮT ĐẦU LOGIC CHIA STACK ---
+        Debug.Log($"<color=yellow>[Right Click Drop]</color> vào slot: <b>{gameObject.name}</b>");
+
+        InventoryItem sourceItem = sourceSlot.currentItem;
+        InventoryItem destinationItem = this.currentItem;
+
+        // Không thể chia stack nếu chỉ còn 1 item
+        if (sourceItem.quantity <= 1) return;
+
+        // Trường hợp 1: Ô đích trống
+        if (destinationItem == null)
+        {
+            // Giảm 1 ở gốc
+            sourceItem.quantity--;
+            // Tạo 1 item mới ở đích
+            InventoryManager.instance.SetItem(this.slotType, this.slotIndex, new InventoryItem(sourceItem.data, 1));
+        }
+        // Trường hợp 2: Ô đích có cùng loại item
+        else if (destinationItem.data.id == sourceItem.data.id)
+        {
+            // (Trong tương lai có thể kiểm tra giới hạn stack của ô đích)
+            // Giảm 1 ở gốc
+            sourceItem.quantity--;
+            // Tăng 1 ở đích
+            destinationItem.quantity++;
+            InventoryManager.instance.SetItem(this.slotType, this.slotIndex, destinationItem);
+        }
+        else
+        {
+            // Nếu ô đích có item khác loại, không làm gì cả
+            return;
+        }
+
+        // Cập nhật lại data ở ô gốc
+        InventoryManager.instance.SetItem(sourceSlot.slotType, sourceSlot.slotIndex, sourceItem);
+
+        // Cập nhật lại số lượng trên icon đang kéo
+        draggableInstance.GetComponent<DraggableItem>()?.UpdateQuantity(sourceItem.quantity);
     }
 }

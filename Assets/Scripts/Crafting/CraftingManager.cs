@@ -10,7 +10,7 @@ public class CraftingManager : MonoBehaviour
     [SerializeField] private List<CraftingRecipe> allRecipes;
 
     // Cache to store the normalized (trimmed) version of recipes for performance
-    private Dictionary<CraftingRecipe, (List<DropItemData> pattern, int width, int height)> _normalizedRecipeCache = new();
+    private Dictionary<CraftingRecipe, (List<ItemData> pattern, int width, int height)> _normalizedRecipeCache = new();
 
     private void Awake()
     {
@@ -29,11 +29,11 @@ public class CraftingManager : MonoBehaviour
     /// Normalizes a given pattern by trimming empty rows and columns.
     /// </summary>
     /// <returns>A tuple containing the trimmed pattern, its width, and its height.</returns>
-    private (List<DropItemData> pattern, int width, int height) NormalizePattern(List<DropItemData> originalPattern, int gridWidth)
+    private (List<ItemData> pattern, int width, int height) NormalizePattern(List<ItemData> originalPattern, int gridWidth)
     {
         if (gridWidth <= 0 || originalPattern == null || originalPattern.Count == 0)
         {
-            return (new List<DropItemData>(), 0, 0);
+            return (new List<ItemData>(), 0, 0);
         }
 
         int gridHeight = originalPattern.Count / gridWidth;
@@ -58,12 +58,12 @@ public class CraftingManager : MonoBehaviour
         // If no items were found, return an empty pattern
         if (maxX == -1)
         {
-            return (new List<DropItemData>(), 0, 0);
+            return (new List<ItemData>(), 0, 0);
         }
 
         int normWidth = maxX - minX + 1;
         int normHeight = maxY - minY + 1;
-        List<DropItemData> normalized = new List<DropItemData>();
+        List<ItemData> normalized = new List<ItemData>();
 
         // Extract the sub-grid
         for (int y = minY; y <= maxY; y++)
@@ -85,7 +85,7 @@ public class CraftingManager : MonoBehaviour
     /// <param name="currentPattern">The list of items from the UI grid.</param>
     /// <param name="gridWidth">The width of the UI grid (e.g., 3 for a 3x3 grid).</param>
     /// <returns>The matching recipe, or null if no match is found.</returns>
-    public CraftingRecipe CheckRecipe(List<DropItemData> currentPattern, int gridWidth)
+    public CraftingRecipe CheckRecipe(List<ItemData> currentPattern, int gridWidth)
     {
         var (normalizedInput, inputWidth, inputHeight) = NormalizePattern(currentPattern, gridWidth);
 
@@ -110,7 +110,7 @@ public class CraftingManager : MonoBehaviour
             if (inputWidth == recipeWidth && inputHeight == recipeHeight)
             {
                 // Compare the actual items in the trimmed patterns
-                if (normalizedInput.SequenceEqual(normalizedRecipe, new DropItemDataComparer()))
+                if (normalizedInput.SequenceEqual(normalizedRecipe, new ItemDataComparer()))
                 {
                     return recipe; // Found a match!
                 }
@@ -122,9 +122,9 @@ public class CraftingManager : MonoBehaviour
 }
 
 // Helper class to compare DropItemData objects based on their ID, handling nulls.
-public class DropItemDataComparer : IEqualityComparer<DropItemData>
+public class ItemDataComparer : IEqualityComparer<ItemData>
 {
-    public bool Equals(DropItemData x, DropItemData y)
+    public bool Equals(ItemData x, ItemData y)
     {
         if (x == null && y == null)
             return true;
@@ -133,7 +133,7 @@ public class DropItemDataComparer : IEqualityComparer<DropItemData>
         return x.id == y.id;
     }
 
-    public int GetHashCode(DropItemData obj)
+    public int GetHashCode(ItemData obj)
     {
         return obj == null ? 0 : obj.id.GetHashCode();
     }
